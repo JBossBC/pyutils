@@ -23,15 +23,13 @@ class outputParams:
         self.targetHeader = targetHeader
 
 
-
-
 class inputParams:
     # the fileterFiles should be dict
     def __init__(self, file, filterFiles):
         if not os.path.exists(file):
             raise "未找到该文件"
         self.file = file
-        if not isinstance(filterFiles,set) and filterFiles is not None:
+        if not isinstance(filterFiles, set) and filterFiles is not None:
             raise "the filterFiles should be dict"
         self.filterFiles = filterFiles
         if os.path.isdir(file):
@@ -55,7 +53,7 @@ class inputParams:
      unitSelect: 一列的数据选择(如果传入字符串类型，则判定为每一行中每一列数据都用相同的规则)
      pageBegin: 一个文件中真实数据从多少个元素开始
      pageNumber: 一个文件中存在多少个数据行
-
+     pageOffset: 数据行的偏移量
 '''
 MAX_CSVROWS = 1048576
 
@@ -130,8 +128,6 @@ class handle:
                     rowsNumber = 1
                     DEFAULT_EXTRAFILENAME = DEFAULT_EXTRAFILENAME + 1
 
-
-
     def _handleFile(self, file):
         with open(r'{}'.format(file), 'r', encoding="utf-8") as f:
             res = f.read()
@@ -140,10 +136,10 @@ class handle:
             return
         html = etree.HTML(res)
         lineLength = len(html.xpath(self.tableXPath))
-        if lineLength >= self.pageNumber+self.pageOffset*self.pageNumber:
+        if lineLength >= self.pageNumber + self.pageOffset * self.pageNumber:
             lineLength = self.pageNumber
-        elif lineLength< self.pageNumber+self.pageOffset*self.pageNumber:
-              lineLength=int(math.floor(float(lineLength/(self.pageOffset+1))))
+        elif lineLength < self.pageNumber + self.pageOffset * self.pageNumber:
+            lineLength = int(math.floor(float(lineLength / (self.pageOffset + 1))))
         times = 0
 
         if self.equalUnit:

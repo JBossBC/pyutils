@@ -3,7 +3,7 @@
 
 ## CutFile
 
-### 拆分文件大小，目前仅仅支持xlsx,后续扩展
+### 拆分文件大小，目前仅仅支持xlsx,csv,后续扩展
 
 
 ## htmlAnalysis
