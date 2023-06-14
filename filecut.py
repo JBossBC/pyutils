@@ -76,7 +76,8 @@ class CSVFileHandle(AbstractFileChain):
             fileNameOutput = "{}_{}".format(files[0], step + files[1])
             subDF.to_csv(fileNameOutput)
             step=step+1
-
+        return True
+    
 
 def CutFile(src):
     try:
