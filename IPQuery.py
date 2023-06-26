@@ -10,6 +10,8 @@ import pandas as pd
 import requests
 from openpyxl import Workbook
 
+import filecut
+
 DEFAULT_WAIT_OTHERSWORKS_TIMES = 8
 DEFAULT_RETRY_SESSION_TIMES = 2
 DEFAULT_MAX_RETRY_TIMES = 10
@@ -60,11 +62,15 @@ def defaultRequestChange(slices: numpy.array, rawRequest: requests.Request):
 def defaultResponseSave(rawResponse: requests.Response):
     jsonData = rawResponse.json()
     returnData = []
-    print(rawResponse.text)
-    for i in range(len(jsonData)):
-        tempData = jsonData[i]
-        returnData.append(tempData['addresses'][0]["address"])
-
+    # print(rawResponse.text)
+    try:
+        for i in range(len(jsonData)):
+            tempData = jsonData[i]
+            # print(tempData)
+            returnData.append(tempData['addresses'][0]["address"])
+    except Exception as e:
+        print(e, "\r\n")
+        print(jsonData)
     return returnData
 
 
@@ -96,12 +102,14 @@ class Controller:
     drain = False
     session: requests.Session = None
     forcedSign: bool = False
+    buryingPointer: bool = False
 
     def __init__(self, src, target):
         chain = createDefaultInputChain()
         self.maxRetryTimes = DEFAULT_MAX_RETRY_TIMES
         self.maxSleepTimes = DEFAULT_MAX_SLEEP_TIMES
         self.maxWorksNumber = DEFAULT_MAX_WORKS_NUMBER
+        self.buryingPointer = False
         self.forcedSign = False
         # start finalizer monitor threading   warning: this function is only match the single progress
         self.monitorFinalizer()
@@ -160,7 +168,7 @@ class Controller:
                     timeBegin = timeBegin * 2
                     try:
                         self.mutex.acquire()
-                        print("正在清理旧的worker")
+                        # print("正在清理旧的worker")
                         sumNum = 0
                         needToClean = []
                         for i in range(self.works.__len__()):
@@ -186,11 +194,12 @@ class Controller:
                     finally:
                         for i in range(len(needToClean)):
                             self.works.remove(needToClean[i])
-                        print("此轮总共清理worker数目:", sumNum)
+                        if sumNum != 0 and self.buryingPointer:
+                            print("此轮总共清理worker数目:", sumNum)
                         self.mutex.release()
                 if self.start >= self.end:
                     break
-                timeBegin = 0.002
+                timeBegin = 0.05
                 nextQuery = min(self.start + self.step, self.end)
                 realRequest = requestChange(self.source.iloc[:, self.inputIndex].values[self.start: nextQuery], request)
                 newWork = work(realRequest, self.source.iloc[:, self.inputIndex].values[self.start: nextQuery], self,
@@ -198,21 +207,12 @@ class Controller:
                 newWork.start()
                 self.works.append(newWork)
                 self.start = nextQuery
-                print("当前执行到", self.start)
+                if self.buryingPointer:
+                    print("当前执行到", self.start)
         except Exception as e:
             print(e)
+            self.forcedSign = True
         finally:
-            while not self.drain:
-                for i in range(len(self.works)):
-                    temp = self.works[i]
-                    if temp.state == 0:
-                        break
-                    if i == len(self.works) - 1 and temp.endIndex >= len(self.source):
-                        time.sleep(DEFAULT_WAIT_OTHERSWORKS_TIMES)
-                        self.drain = True
-                        break
-                if not self.drain:
-                    time.sleep(DEFAULT_DRAIN_SLEEP_TIMES)
             self.finalizer()
 
     def finalizer(self):
@@ -230,9 +230,13 @@ class Controller:
             outputChain = createDefaultOutputChain()
             outputChain.set_dataset(self.output)
             outputChain.handle(self.targetFile)
+            if filecut.exceedMaxNumber(self.output):
+                filecut.CutFile(self.targetFile)
             for i in range(self.failedWorks.__len__()):
-                print("错误报告: 从", self.failedWorks[i].startIndex + 1, "行------------------>",
-                      self.failedWorks[i].endIndex + 1 + "行")
+                self.failedWorks[i].run()
+                if self.failedWorks[i].state is not 1:
+                    print("错误报告: 从", str(int(self.failedWorks[i].startIndex) + 1), "行------------------>",
+                          str(self.failedWorks[i].endIndex + 1), "行")
 
     def monitorFinalizer(self):
         # pass
@@ -240,6 +244,17 @@ class Controller:
         def monitorFunc():
             while True:
                 if self.forcedSign:
+                    while not self.drain:
+                        for i in range(len(self.works)):
+                            temp = self.works[i]
+                            if temp.state == 0:
+                                break
+                            if i == len(self.works) - 1:
+                                time.sleep(DEFAULT_WAIT_OTHERSWORKS_TIMES)
+                                self.drain = True
+                                break
+                        if not self.drain:
+                            time.sleep(DEFAULT_DRAIN_SLEEP_TIMES)
                     # when the forced sign begin,should drain the all resource
                     self.finalizer()
                     currentID = os.getpid()
@@ -405,8 +420,8 @@ class work(threading.Thread):
                             time.sleep(DEFAULT_RETRY_SESSION_TIMES)
                             self.center.session = requests.session()
                             # self.center.mutex.release()
-                        print(e + "\r\n")
-                        print(response.status_code + "\r\n")
+                        print(e, "\r\n")
+                        print(response.status_code, "\r\n")
                         print(response.text)
                     finally:
                         self.center.mutex.release()
