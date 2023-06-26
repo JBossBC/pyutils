@@ -9,3 +9,10 @@
 ## htmlAnalysis
 
 ### 将html页面的有效数据提取出来，不同于etree，只需要关注数据位置即可
+
+
+## IPQuery
+
+### IP查询: 搜索表格中有关的IP数据，自动查询其归属地,如果target为src,则在表格后面追加归属地信息,如果为target不为src,则重新生成一个关于IP和IP归属地的表格
+
+> 减小worker的粒度，增强了性能，同时使用
