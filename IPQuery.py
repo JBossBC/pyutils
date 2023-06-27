@@ -12,17 +12,17 @@ from openpyxl import Workbook
 
 import filecut
 
-DEFAULT_WAIT_OTHERSWORKS_TIMES = 8
-DEFAULT_RETRY_SESSION_TIMES = 2
+DEFAULT_WAIT_OTHERSWORKS_TIMES = 5
+DEFAULT_RETRY_SESSION_TIMES = 1.5
 DEFAULT_MAX_RETRY_TIMES = 10
-DEFAULT_MAX_WORKS_NUMBER = 80
+DEFAULT_MAX_WORKS_NUMBER = 100
 DEFAULT_MAX_SLEEP_TIMES = 2
 DEFAULT_DRAIN_SLEEP_TIMES = 3
 DEFAULT_ADDITIONAL_IP_NAME = 'IP'
 
-DEFAULT_FAILED_INTERNAL = 0.5
+DEFAULT_FAILED_INTERNAL = 0.005  # 5ms
 
-DEFAULT_MONITOR_SLEEP_TIME = 2
+DEFAULT_MONITOR_SLEEP_TIME = 3
 
 
 def requestInterface():
@@ -69,8 +69,9 @@ def defaultResponseSave(rawResponse: requests.Response):
             # print(tempData)
             returnData.append(tempData['addresses'][0]["address"])
     except Exception as e:
-        print(e, "\r\n")
-        print(jsonData)
+        pass
+        # print(e, "\r\n")
+        # print(jsonData)
     return returnData
 
 
@@ -167,7 +168,7 @@ class Controller:
                     time.sleep(timeBegin)
                     timeBegin = timeBegin * 2
                     try:
-                        self.mutex.acquire()
+                        # self.mutex.acquire()
                         # print("正在清理旧的worker")
                         sumNum = 0
                         needToClean = []
@@ -196,7 +197,7 @@ class Controller:
                             self.works.remove(needToClean[i])
                         if sumNum != 0 and self.buryingPointer:
                             print("此轮总共清理worker数目:", sumNum)
-                        self.mutex.release()
+                        # self.mutex.release()
                 if self.start >= self.end:
                     break
                 timeBegin = 0.05
@@ -233,8 +234,9 @@ class Controller:
             if filecut.exceedMaxNumber(self.output):
                 filecut.CutFile(self.targetFile)
             for i in range(self.failedWorks.__len__()):
-                self.failedWorks[i].run()
+                # self.failedWorks[i].run()
                 if self.failedWorks[i].state is not 1:
+                    # TODO reporter should write file
                     print("错误报告: 从", str(int(self.failedWorks[i].startIndex) + 1), "行------------------>",
                           str(self.failedWorks[i].endIndex + 1), "行")
 
@@ -390,9 +392,10 @@ class work(threading.Thread):
                 prepare_request = self.center.session.prepare_request(self.baseRequest)
                 response = self.center.session.send(prepare_request)
                 if response.status_code == 200:
-                    self.result = self.center.responseSave(response)
                     try:
+                        self.result = self.center.responseSave(response)
                         self.center.mutex.acquire()
+                    finally:
                         if self.center.additionalFlag:
                             temp = pd.DataFrame({self.center.output.columns[self.center.outputIndex]: self.result})
                             for i in range(self.startIndex, self.endIndex, 1):
@@ -400,6 +403,9 @@ class work(threading.Thread):
                                                        [self.center.output.columns[self.center.outputIndex]]] = \
                                     temp.loc[i - self.startIndex]
                         else:
+                            # TODO resolve the error ip cant reveal in the new File
+                            while len(self.result) != len(self.baseData):
+                                self.result.append(None)
                             temp = pd.DataFrame({self.center.output.columns[self.center.additionalIndex]: [
                                 self.baseData[i] for i in range(len(self.baseData))],
                                 self.center.output.columns[self.center.outputIndex]: self.result})
@@ -410,21 +416,20 @@ class work(threading.Thread):
                                     i - self.startIndex]
                         self.state = 1
                         return
-                    except Exception as e:
-                        if e is requests.ConnectionError:
-                            # self.center.mutex.acquire()
-                            # if not self.center.mutex.locked():
-                            #     self.center.mutex.acquire()
-                            self.center.session.close()
-                            self.center.session = None
-                            time.sleep(DEFAULT_RETRY_SESSION_TIMES)
-                            self.center.session = requests.session()
-                            # self.center.mutex.release()
-                        print(e, "\r\n")
-                        print(response.status_code, "\r\n")
-                        print(response.text)
-                    finally:
-                        self.center.mutex.release()
+            except Exception as e:
+                if e is requests.ConnectionError:
+                    # self.center.mutex.acquire()
+                    # if not self.center.mutex.locked():
+                    #     self.center.mutex.acquire()
+                    self.center.session.close()
+                    self.center.session = None
+                    time.sleep(DEFAULT_RETRY_SESSION_TIMES)
+                    self.center.session = requests.session()
+                    # self.center.mutex.release()
+                print(e, "\r\n")
+                print(response.status_code, "\r\n")
+                print(response.text)
+
             # except Exception as e:
             #     print(e)
             #     self.state = 2
@@ -432,6 +437,8 @@ class work(threading.Thread):
                 if self.state != 1:
                     time.sleep(DEFAULT_FAILED_INTERNAL)
                 self.retryTimes = self.retryTimes + 1
+                if self.center.mutex.locked():
+                    self.center.mutex.release()
 
     def __init__(self, request, baseData, center, start, end):
         super().__init__()
@@ -440,3 +447,4 @@ class work(threading.Thread):
         self.endIndex = end
         self.baseRequest = request
         self.center = center
+        # self.result = [None]*(start-end)
