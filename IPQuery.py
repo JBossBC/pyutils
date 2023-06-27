@@ -63,22 +63,27 @@ def defaultResponseSave(rawResponse: requests.Response):
     jsonData = rawResponse.json()
     returnData = []
     # print(rawResponse.text)
-    try:
-        for i in range(len(jsonData)):
+    for i in range(len(jsonData)):
+        try:
             tempData = jsonData[i]
             # print(tempData)
             returnData.append(tempData['addresses'][0]["address"])
-    except Exception as e:
-        pass
-        # print(e, "\r\n")
-        # print(jsonData)
+        except Exception as e:
+            returnData.append("IP不合法")
+            pass
+    # print(e, "\r\n")
+    # print(jsonData)
     return returnData
 
 
-def IP_Query(src, target):
+def IP_QueryForNewFile(src, target):
     controller = Controller(src, target)
     controller.Run(request=requestInterface(), requestChange=defaultRequestChange, responseSave=defaultResponseSave,
                    start=0, step=50)
+
+
+def IP_Query(src):
+    IP_QueryForNewFile(src, src)
 
 
 class Controller:
@@ -217,28 +222,28 @@ class Controller:
             self.finalizer()
 
     def finalizer(self):
-        try:
-            for i in range(self.failedWorks.__len__()):
-                worker = self.failedWorks[i]
-                worker.run()
-                if not worker.is_alive() and worker.state == 1:
-                    self.failedWorks.remove(worker)
+        # try:
+        # for i in range(self.failedWorks.__len__()):
+        #     worker = self.failedWorks[i]
+        #     worker.run()
+        #     if not worker.is_alive() and worker.state == 1:
+        #         self.failedWorks.remove(worker)
 
-            # reported the error for this running
-        except Exception as e:
-            print(e)
-        finally:
-            outputChain = createDefaultOutputChain()
-            outputChain.set_dataset(self.output)
-            outputChain.handle(self.targetFile)
-            if filecut.exceedMaxNumber(self.output):
-                filecut.CutFile(self.targetFile)
-            for i in range(self.failedWorks.__len__()):
-                # self.failedWorks[i].run()
-                if self.failedWorks[i].state is not 1:
-                    # TODO reporter should write file
-                    print("错误报告: 从", str(int(self.failedWorks[i].startIndex) + 1), "行------------------>",
-                          str(self.failedWorks[i].endIndex + 1), "行")
+        # reported the error for this running
+        # except Exception as e:
+        #     print(e)
+        # finally:
+        outputChain = createDefaultOutputChain()
+        outputChain.set_dataset(self.output)
+        outputChain.handle(self.targetFile)
+        if filecut.exceedMaxNumber(self.output):
+            filecut.CutFile(self.targetFile)
+        for i in range(self.failedWorks.__len__()):
+            # self.failedWorks[i].run()
+            if self.failedWorks[i].state is not 1:
+                # TODO reporter should write file
+                print("错误报告: 从", str(int(self.failedWorks[i].startIndex) + 1), "行------------------>",
+                      str(self.failedWorks[i].endIndex + 1), "行")
 
     def monitorFinalizer(self):
         # pass
@@ -426,9 +431,10 @@ class work(threading.Thread):
                     time.sleep(DEFAULT_RETRY_SESSION_TIMES)
                     self.center.session = requests.session()
                     # self.center.mutex.release()
-                print(e, "\r\n")
-                print(response.status_code, "\r\n")
-                print(response.text)
+                if response.status_code != 200:
+                    print(e, "\r\n")
+                    print(response.status_code, "\r\n")
+                    print(response.text)
 
             # except Exception as e:
             #     print(e)
