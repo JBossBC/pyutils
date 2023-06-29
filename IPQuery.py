@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 import numpy
 import pandas as pd
 import requests
-from openpyxl import Workbook
 
 import filecut
 
@@ -76,12 +75,17 @@ def defaultResponseSave(rawResponse: requests.Response):
     return returnData
 
 
+# IP_Query importance:
+# src: the file path which need to analysis
+# target: if the difference as the src, the result  will be saved the new File which including the ip field and address field
 def IP_QueryForNewFile(src, target):
     controller = Controller(src, target)
     controller.Run(request=requestInterface(), requestChange=defaultRequestChange, responseSave=defaultResponseSave,
                    start=0, step=50)
 
 
+# IP_Query importance:
+# src: the file path which need to analysis
 def IP_Query(src):
     IP_QueryForNewFile(src, src)
 
@@ -219,7 +223,8 @@ class Controller:
             print(e)
             self.forcedSign = True
         finally:
-            self.finalizer()
+            if not self.forcedSign:
+               self.finalizer()
 
     def finalizer(self):
         # try:
@@ -240,7 +245,7 @@ class Controller:
             filecut.CutFile(self.targetFile)
         for i in range(self.failedWorks.__len__()):
             # self.failedWorks[i].run()
-            if self.failedWorks[i].state is not 1:
+            if self.failedWorks[i].state != 1:
                 # TODO reporter should write file
                 print("错误报告: 从", str(int(self.failedWorks[i].startIndex) + 1), "行------------------>",
                       str(self.failedWorks[i].endIndex + 1), "行")
@@ -408,7 +413,7 @@ class work(threading.Thread):
                                                        [self.center.output.columns[self.center.outputIndex]]] = \
                                     temp.loc[i - self.startIndex]
                         else:
-                            # TODO resolve the error ip cant reveal in the new File
+                            # TODO resolve the error ip cant reveal in the  File
                             while len(self.result) != len(self.baseData):
                                 self.result.append(None)
                             temp = pd.DataFrame({self.center.output.columns[self.center.additionalIndex]: [
